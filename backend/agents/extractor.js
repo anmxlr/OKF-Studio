@@ -185,3 +185,108 @@ ${textSnippet}
 
   return { success: true };
 }
+
+export async function updateKnowledgeWithCorrection(workspacePath, filename, instruction) {
+  const summaryPath = path.join(workspacePath, 'summaries', `${filename}.md`);
+  const extractedPath = path.join(workspacePath, 'extracted', `${filename}.md`);
+  const metadataPath = path.join(workspacePath, 'metadata', `${filename}.yaml`);
+
+  // Read existing files
+  let oldMarkdown = '';
+  if (fs.existsSync(extractedPath)) {
+    oldMarkdown = fs.readFileSync(extractedPath, 'utf8');
+  } else {
+    oldMarkdown = `# Knowledge Profile: ${filename}\n\n[Empty Profile]`;
+  }
+
+  let oldYaml = {};
+  if (fs.existsSync(metadataPath)) {
+    try {
+      oldYaml = yaml.load(fs.readFileSync(metadataPath, 'utf8')) || {};
+    } catch (e) {
+      console.error('Error loading YAML metadata for correction:', e);
+    }
+  }
+
+  // 1. Update Extracted Markdown
+  const updateMdPrompt = `You are a precise data editor. Update the document profile below based on the user's correction/instruction.
+  
+Instruction: "${instruction}"
+
+Original Profile:
+${oldMarkdown}
+
+Output the UPDATED profile in clean Markdown. Keep the same outline/structure (Summary, Key Topics, Important Facts, etc.), but update the relevant facts, details, values, tables, or notes based on the instruction. Output ONLY the updated markdown profile without any comments or conversational text.`;
+
+  let newMarkdown = oldMarkdown;
+  try {
+    newMarkdown = await chatCompletion([
+      { role: 'user', content: updateMdPrompt }
+    ], { temperature: 0.2 });
+  } catch (err) {
+    console.error('Failed to update markdown with LLM:', err);
+    throw new Error('LLM failed to update document profile: ' + err.message);
+  }
+
+  // 2. Update Metadata YAML
+  const updateYamlPrompt = `You are a metadata editor. Update the YAML metadata below based on the user's correction/instruction.
+
+Instruction: "${instruction}"
+
+Original Metadata:
+${yaml.dump(oldYaml)}
+
+Output ONLY a valid YAML block inside \`\`\`yaml and \`\`\` code fence. Follow the exact schema of the original metadata, updating topics, tags, dates, author, or relationships if relevant to the instruction.
+\`\`\`yaml`;
+
+  let newYamlObject = { ...oldYaml };
+  try {
+    const yamlText = await chatCompletion([
+      { role: 'user', content: updateYamlPrompt }
+    ], { temperature: 0.1 });
+
+    let cleanYaml = '';
+    const yamlBlockRegex = /```yaml([\s\S]*?)```/;
+    const match = yamlText.match(yamlBlockRegex);
+    if (match) {
+      cleanYaml = match[1].trim();
+    } else {
+      const codeBlockRegex = /```([\s\S]*?)```/;
+      const codeMatch = yamlText.match(codeBlockRegex);
+      if (codeMatch) {
+        cleanYaml = codeMatch[1].trim();
+      }
+    }
+    if (cleanYaml) {
+      const loaded = yaml.load(cleanYaml);
+      if (loaded && typeof loaded === 'object') {
+        newYamlObject = { ...newYamlObject, ...loaded };
+      }
+    }
+  } catch (err) {
+    console.error('Failed to update YAML metadata with LLM:', err);
+  }
+
+  // 3. Generate updated executive summary
+  const updateSummaryPrompt = `Write a short 2-to-3 sentence executive summary of this updated document profile. Do not include introductory text, start directly with the summary.
+
+Updated Document Profile:
+${newMarkdown}
+`;
+
+  let newSummary = '';
+  try {
+    newSummary = await chatCompletion([
+      { role: 'user', content: updateSummaryPrompt }
+    ], { temperature: 0.3 });
+  } catch (err) {
+    newSummary = `Summary of updated ${filename}.`;
+  }
+
+  // Save files
+  fs.writeFileSync(summaryPath, newSummary, 'utf8');
+  fs.writeFileSync(extractedPath, newMarkdown, 'utf8');
+  fs.writeFileSync(metadataPath, yaml.dump(newYamlObject), 'utf8');
+
+  return { success: true, updatedMarkdown: newMarkdown, updatedYaml: newYamlObject };
+}

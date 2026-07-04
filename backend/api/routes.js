@@ -3,6 +3,10 @@ import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
 import yaml from 'js-yaml';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
 
 import { 
   listWorkspaces, 
@@ -27,6 +31,7 @@ import { loadConfig, saveConfig } from '../shared/config.js';
 import { getModels, chatCompletion } from '../llm/client.js';
 import { enqueueFile, reindexFile } from '../agents/indexer.js';
 import { searchWorkspace } from '../agents/searcher.js';
+import { updateKnowledgeWithCorrection } from '../agents/extractor.js';
 
 const router = express.Router();
 
@@ -50,6 +55,23 @@ const upload = multer({ storage: storage });
 // Multer setup for zip imports
 const zipStorage = multer.memoryStorage();
 const uploadZip = multer({ storage: zipStorage });
+
+// Multer setup for temporary audio voice recordings
+const audioStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const wsName = req.params.name;
+    const wsPath = getWorkspacePath(wsName);
+    const dest = path.join(wsPath, 'cache');
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(dest, { recursive: true });
+    }
+    cb(null, dest);
+  },
+  filename: function (req, file, cb) {
+    cb(null, `voice_${Date.now()}_${file.originalname || 'voice.webm'}`);
+  }
+});
+const audioUpload = multer({ storage: audioStorage });
 
 // ----------------------------------------------------
 // SETTINGS
@@ -175,7 +197,94 @@ router.post('/workspaces/:name/chat', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  // 2. Perform multi-stage workspace search to gather context
+  const wsPath = getWorkspacePath(wsName);
+
+  // 2. Classify if user wants to update or correct a file
+  let isUpdateIntent = false;
+  let updateTargetFile = null;
+  let updateInstruction = null;
+
+  try {
+    const summariesPath = path.join(wsPath, 'summaries');
+    let summariesList = [];
+    if (fs.existsSync(summariesPath)) {
+      const summaryFiles = fs.readdirSync(summariesPath).filter(f => f.endsWith('.md'));
+      for (const file of summaryFiles) {
+        const originalName = file.replace(/\.md$/, '');
+        summariesList.push({ filename: originalName });
+      }
+    }
+
+    if (summariesList.length > 0) {
+      const classificationPrompt = `You are a message intent classifier for a local document knowledge base.
+Check if the user is requesting to correct, update, edit, modify, or add new information to an existing document/file in their workspace.
+
+User Message: "${message}"
+
+Available Files in Workspace:
+${summariesList.map(s => `- ${s.filename}`).join('\n')}
+
+If they want to update/correct/edit an existing file, output a JSON object:
+{
+  "isUpdate": true,
+  "targetFile": "exact filename from the list above",
+  "instruction": "the specific correction/update details"
+}
+If they are NOT requesting to update/correct/edit any of these files (e.g. they are asking a question, greeting, or chatting), return:
+{
+  "isUpdate": false
+}
+
+Output ONLY the JSON block. Do not include any other text.`;
+
+      const classRes = await chatCompletion([
+        { role: 'user', content: classificationPrompt }
+      ], { temperature: 0.1 });
+
+      const jsonMatch = classRes.match(/\{[\s\S]*?\}/);
+      if (jsonMatch) {
+        const classObj = JSON.parse(jsonMatch[0]);
+        if (classObj.isUpdate && classObj.targetFile && classObj.instruction) {
+          const exists = summariesList.some(s => s.filename.toLowerCase() === classObj.targetFile.toLowerCase());
+          if (exists) {
+            isUpdateIntent = true;
+            const matchFile = summariesList.find(s => s.filename.toLowerCase() === classObj.targetFile.toLowerCase());
+            updateTargetFile = matchFile.filename;
+            updateInstruction = classObj.instruction;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Intent classification failed:', err);
+  }
+
+  // If correction intent, edit the document directly and respond
+  if (isUpdateIntent) {
+    res.write(`data: ${JSON.stringify({ status: 'updating_file', filename: updateTargetFile })}\n\n`);
+    try {
+      await updateKnowledgeWithCorrection(wsPath, updateTargetFile, updateInstruction);
+      
+      const updateMsg = `I have successfully updated the workspace profile of **${updateTargetFile}** with your correction/new information:
+> "${updateInstruction}"
+
+The document summary, extracted markdown facts, and metadata YAML files have been updated directly on your local disk. Let me know if there's anything else you'd like to correct!`;
+      
+      // Save assistant response
+      appendChatMessage(wsName, 'Assistant', updateMsg);
+      
+      res.write(`data: ${JSON.stringify({ status: 'finished', text: updateMsg })}\n\n`);
+      res.end();
+      return;
+    } catch (err) {
+      console.error('Failed to apply correction to file:', err);
+      res.write(`data: ${JSON.stringify({ status: 'error', error: 'Failed to apply document correction: ' + err.message })}\n\n`);
+      res.end();
+      return;
+    }
+  }
+
+  // 3. Perform multi-stage workspace search to gather context
   let searchContext = '';
   let sourcesList = [];
   try {
@@ -390,6 +499,45 @@ router.post('/workspaces/:name/files/:filename/rename', (req, res) => {
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/workspaces/:name/transcribe', audioUpload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file uploaded' });
+    }
+
+    const filePath = req.file.path;
+    const ext = path.extname(filePath).toLowerCase();
+    const basename = path.basename(filePath, ext);
+    const cachePath = path.dirname(filePath);
+
+    console.log(`[Transcribe] Running Whisper transcription for voice input: ${filePath}`);
+
+    const cmd = `whisper "${filePath}" --output_dir "${cachePath}" --output_format txt --model base`;
+    await execPromise(cmd);
+
+    let transcript = '';
+    const txtPath = path.join(cachePath, `${basename}.txt`);
+    if (fs.existsSync(txtPath)) {
+      transcript = fs.readFileSync(txtPath, 'utf8').trim();
+      fs.unlinkSync(txtPath);
+    }
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.json({ text: transcript });
+  } catch (err) {
+    console.error('[Transcribe] Failed to transcribe voice input:', err);
+    if (req.file && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e) {}
+    }
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -9,6 +9,11 @@ let availableModels = [];
 let indexingPollInterval = null;
 let isGenerating = false;
 
+// Voice Recording State
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+
 // DOM Elements
 const workspaceList = document.getElementById('workspace-list');
 const btnNewChat = document.getElementById('btn-new-chat');
@@ -29,6 +34,7 @@ const sourcesBadges = document.getElementById('sources-badges');
 const btnAttach = document.getElementById('btn-attach');
 const fileUploader = document.getElementById('file-uploader');
 const promptInput = document.getElementById('prompt-input');
+const btnAudio = document.getElementById('btn-audio');
 const btnSend = document.getElementById('btn-send');
 const modelSelector = document.getElementById('model-selector');
 const tokenUsage = document.getElementById('token-usage');
@@ -80,6 +86,13 @@ async function init() {
   await loadSettings();
   await fetchModels();
   await fetchWorkspaces();
+  
+  // Restore active workspace if refreshed inside the same session
+  const lastActive = sessionStorage.getItem('lastActiveWorkspace');
+  if (lastActive && workspaces.some(w => w.name === lastActive)) {
+    await selectWorkspace(lastActive);
+  }
+
   setupEventListeners();
   
   // Auto-resize input prompt
@@ -149,6 +162,7 @@ function setupEventListeners() {
 
   // Chat actions
   btnSend.addEventListener('click', sendMessage);
+  btnAudio.addEventListener('click', toggleAudioRecording);
   promptInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -369,11 +383,13 @@ async function selectWorkspace(name) {
   if (isGenerating) return;
   
   activeWorkspace = name;
+  sessionStorage.setItem('lastActiveWorkspace', name);
   renderWorkspaces();
   
   // Enable Inputs
   promptInput.removeAttribute('disabled');
   btnSend.removeAttribute('disabled');
+  btnAudio.removeAttribute('disabled');
   
   // Show header titles
   activeWorkspaceTitle.textContent = name;
@@ -469,11 +485,13 @@ async function handleDeleteWorkspace() {
 
     if (res.ok) {
       activeWorkspace = null;
+      sessionStorage.removeItem('lastActiveWorkspace');
       workspaceActions.style.display = 'none';
       activeWorkspaceTitle.textContent = 'Select or Create a Workspace';
       chatMessages.innerHTML = '';
       promptInput.setAttribute('disabled', 'true');
       btnSend.setAttribute('disabled', 'true');
+      btnAudio.setAttribute('disabled', 'true');
       
       stopPollingIndexStatus();
       fileViewerDrawer.classList.add('hidden');
@@ -566,6 +584,91 @@ function updateMessageContent(element, text) {
   Prism.highlightAllUnder(body);
 }
 
+async function toggleAudioRecording() {
+  if (isRecording) {
+    mediaRecorder.stop();
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("Your browser does not support audio recording.");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    
+    mediaRecorder.addEventListener('dataavailable', (event) => {
+      audioChunks.push(event.data);
+    });
+
+    mediaRecorder.addEventListener('stop', async () => {
+      stream.getTracks().forEach(track => track.stop());
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      await uploadVoiceAudio(audioBlob);
+    });
+
+    mediaRecorder.start();
+    isRecording = true;
+    btnAudio.classList.add('recording');
+    btnAudio.title = "Stop Recording";
+    promptInput.placeholder = "Recording voice... Click mic again to stop.";
+    promptInput.setAttribute('disabled', 'true');
+    btnSend.setAttribute('disabled', 'true');
+  } catch (err) {
+    console.error("Microphone access failed:", err);
+    alert("Failed to access microphone: " + err.message);
+  }
+}
+
+async function uploadVoiceAudio(blob) {
+  btnAudio.setAttribute('disabled', 'true');
+  btnAudio.classList.remove('recording');
+  btnAudio.title = "Transcribing...";
+  promptInput.placeholder = "Transcribing voice via Whisper...";
+
+  const formData = new FormData();
+  formData.append('audio', blob, 'voice.webm');
+
+  try {
+    const res = await fetch(`/api/workspaces/${activeWorkspace}/transcribe`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.text) {
+        if (promptInput.value) {
+          promptInput.value += ' ' + data.text;
+        } else {
+          promptInput.value = data.text;
+        }
+        promptInput.style.height = 'auto';
+        promptInput.style.height = promptInput.scrollHeight + 'px';
+      } else {
+        alert("Whisper did not detect any speech in the audio.");
+      }
+    } else {
+      const err = await res.json();
+      alert("Transcription failed: " + (err.error || 'Unknown error'));
+    }
+  } catch (err) {
+    console.error("Transcription upload failed:", err);
+    alert("Error uploading voice file: " + err.message);
+  } finally {
+    isRecording = false;
+    btnAudio.removeAttribute('disabled');
+    btnAudio.title = "Voice Input (Whisper)";
+    promptInput.placeholder = "Type a message or ask a question about your files...";
+    promptInput.removeAttribute('disabled');
+    btnSend.removeAttribute('disabled');
+    promptInput.focus();
+  }
+}
+
 async function sendMessage() {
   if (isGenerating || !activeWorkspace) return;
   
@@ -584,6 +687,7 @@ async function sendMessage() {
   isGenerating = true;
   promptInput.setAttribute('disabled', 'true');
   btnSend.setAttribute('disabled', 'true');
+  btnAudio.setAttribute('disabled', 'true');
   sourcesBadgeContainer.style.display = 'none';
   sourcesBadges.innerHTML = '';
 
@@ -642,6 +746,7 @@ async function sendMessage() {
     isGenerating = false;
     promptInput.removeAttribute('disabled');
     btnSend.removeAttribute('disabled');
+    btnAudio.removeAttribute('disabled');
     promptInput.focus();
   }
 }
