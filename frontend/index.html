@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open Knowledge Format (OKF)</title>
+  <link rel="stylesheet" href="index.css">
+  <!-- Vendor libraries (local backups loaded via app.js) -->
+  <link rel="stylesheet" href="vendor/prism.css">
+</head>
+<body class="theme-light">
+
+  <div class="app-container">
+    
+    <!-- LEFT SIDEBAR: WORKSPACES & NAVIGATION -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="logo">OKF</h1>
+        <span class="sub-logo">Open Knowledge Format</span>
+      </div>
+      
+      <button id="btn-new-chat" class="btn btn-bold btn-block">+ New Workspace</button>
+      
+      <div class="workspace-list-container">
+        <h3>Workspaces</h3>
+        <ul id="workspace-list" class="nav-list">
+          <!-- Dynamically populated -->
+        </ul>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="import-zone" id="import-zone">
+          <label for="import-file" class="import-label">
+            <span>Import Workspace (.zip)</span>
+            <input type="file" id="import-file" accept=".zip" style="display: none;">
+          </label>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER AREA: CONVERSATION -->
+    <main class="main-content">
+      <header class="app-header">
+        <div class="header-left">
+          <h2 id="active-workspace-title">Select or Create a Workspace</h2>
+          <div class="workspace-actions" style="display: none;">
+            <button id="btn-rename-ws" class="btn-icon" title="Rename Workspace">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+            <button id="btn-delete-ws" class="btn-icon" title="Delete Workspace">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+            </button>
+            <button id="btn-export-ws" class="btn-icon" title="Export Workspace (ZIP)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </button>
+            <button id="btn-view-files" class="btn-icon" title="Manage Workspace Files">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </button>
+          </div>
+        </div>
+        
+        <div class="header-right">
+          <div id="indexing-indicator" class="status-indicator" style="display: none;">
+            <span class="pulse-dot"></span>
+            <span id="indexing-status-text">Indexing...</span>
+          </div>
+          
+          <!-- Theme Toggle Switch -->
+          <div class="theme-toggle-wrapper" title="Toggle Theme">
+            <input type="checkbox" id="theme-switch" class="theme-switch-checkbox">
+            <label for="theme-switch" class="theme-switch-label">
+              <span class="theme-switch-switch"></span>
+            </label>
+          </div>
+
+          <button id="btn-settings" class="btn-icon" title="Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="chat-container">
+        <div id="chat-messages" class="messages-list">
+          <div class="welcome-message">
+            <h2>Welcome to Open Knowledge Format</h2>
+            <p>A simple, human-readable, local-first knowledge base. Every chat workspace is just a folder of files on your disk.</p>
+            <p>To begin, select an existing workspace from the sidebar or click <strong>+ New Workspace</strong>.</p>
+          </div>
+        </div>
+        
+        <div id="sources-badge-container" class="sources-badge-container" style="display: none;">
+          <span class="sources-label">Document Context:</span>
+          <div id="sources-badges" class="badges-wrapper"></div>
+        </div>
+
+        <div class="chat-input-area">
+          <div class="input-row">
+            <button id="btn-attach" class="btn btn-attach" title="Attach Document (PDF, TXT, DOCX, XLSX, Images...)">+</button>
+            <input type="file" id="file-uploader" multiple style="display: none;">
+            
+            <textarea id="prompt-input" placeholder="Type a message or ask a question about your files..." rows="1" disabled></textarea>
+            
+            <button id="btn-send" class="btn btn-bold" disabled>→</button>
+          </div>
+          
+          <div class="input-footer">
+            <div class="footer-left">
+              <label for="model-selector">Model:</label>
+              <select id="model-selector" class="select-minimal">
+                <option value="">No local models found</option>
+              </select>
+            </div>
+            <div class="footer-right">
+              <span id="token-usage">Tokens: 0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT DRAWER: FILE VIEWER & METADATA -->
+    <aside id="file-viewer-drawer" class="drawer hidden">
+      <header class="drawer-header">
+        <h3>File Profile</h3>
+        <button id="btn-close-drawer" class="btn-icon">×</button>
+      </header>
+      
+      <div class="drawer-selector-bar">
+        <select id="drawer-file-select" class="select-minimal" style="flex: 1; min-width: 0;">
+          <!-- Populated with workspace assets -->
+        </select>
+        <button id="btn-reindex-file" class="btn btn-small" title="Re-run knowledge extraction">Re-index</button>
+        <button id="btn-rename-file" class="btn btn-small" title="Rename File">Rename</button>
+        <button id="btn-delete-file" class="btn btn-small btn-danger" title="Delete File">Delete</button>
+      </div>
+
+      <nav class="drawer-tabs">
+        <button class="tab-btn active" data-tab="tab-summary">Summary</button>
+        <button class="tab-btn" data-tab="tab-metadata">Metadata (YAML)</button>
+        <button class="tab-btn" data-tab="tab-extracted">Extracted (MD)</button>
+        <button class="tab-btn" data-tab="tab-original">Original</button>
+      </nav>
+
+      <div class="drawer-content-container">
+        <!-- TAB: SUMMARY -->
+        <div id="tab-summary" class="tab-panel active">
+          <div class="markdown-body" id="summary-viewer-content">
+            <p class="placeholder-text">No summary available.</p>
+          </div>
+        </div>
+
+        <!-- TAB: METADATA -->
+        <div id="tab-metadata" class="tab-panel">
+          <pre><code class="language-yaml" id="metadata-viewer-content"># No metadata loaded</code></pre>
+        </div>
+
+        <!-- TAB: EXTRACTED -->
+        <div id="tab-extracted" class="tab-panel">
+          <div class="markdown-body" id="extracted-viewer-content">
+            <p class="placeholder-text">No extracted content available.</p>
+          </div>
+        </div>
+
+        <!-- TAB: ORIGINAL PREVIEW -->
+        <div id="tab-original" class="tab-panel">
+          <div id="original-viewer-content" class="original-preview-wrapper">
+            <p class="placeholder-text">Preview not available for this file type.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-container">
+      <header class="modal-header">
+        <h2>Global Settings</h2>
+        <button id="btn-close-settings" class="btn-icon">×</button>
+      </header>
+      <div class="modal-body">
+        <form id="settings-form">
+          <div class="form-group">
+            <label for="setting-provider">Active AI Provider</label>
+            <select id="setting-provider" class="select-minimal block-width">
+              <option value="ollama">Ollama (Default Local)</option>
+              <option value="lmstudio">LM Studio (OpenAI Compatible)</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="setting-ollama-url">Ollama Endpoint URL</label>
+            <input type="text" id="setting-ollama-url" class="input-minimal block-width" placeholder="http://localhost:11434">
+          </div>
+
+          <div class="form-group">
+            <label for="setting-lmstudio-url">LM Studio Endpoint URL</label>
+            <input type="text" id="setting-lmstudio-url" class="input-minimal block-width" placeholder="http://localhost:1234/v1">
+          </div>
+
+          <div class="form-group-row">
+            <div class="form-group col-6">
+              <label for="setting-temperature">Temperature: <span id="val-temp">0.7</span></label>
+              <input type="range" id="setting-temperature" min="0" max="1.5" step="0.1" value="0.7">
+            </div>
+            <div class="form-group col-6">
+              <label for="setting-context">Context Size (tokens)</label>
+              <input type="number" id="setting-context" class="input-minimal block-width" value="2048">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="setting-embed-model">Default Embedding Model</label>
+            <input type="text" id="setting-embed-model" class="input-minimal block-width" placeholder="nomic-embed-text">
+          </div>
+
+          <div class="form-group">
+            <label for="setting-template">Prompt Template (Markdown)</label>
+            <textarea id="setting-template" rows="6" class="textarea-minimal block-width" placeholder="Prompt structure..."></textarea>
+            <small class="help-text">Use <code>{{context}}</code> and <code>{{question}}</code> placeholders.</small>
+          </div>
+
+          <div class="form-group">
+            <label for="setting-theme">App Theme</label>
+            <select id="setting-theme" class="select-minimal block-width">
+              <option value="light">Black on White (Light)</option>
+              <option value="dark">White on Black (Dark)</option>
+            </select>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="btn-cancel-settings" class="btn">Cancel</button>
+            <button type="submit" class="btn btn-bold">Save Settings</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENAME WORKSPACE MODAL -->
+  <div id="rename-modal" class="modal-overlay hidden">
+    <div class="modal-container modal-small">
+      <header class="modal-header">
+        <h2>Rename Workspace</h2>
+        <button id="btn-close-rename" class="btn-icon">×</button>
+      </header>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="rename-ws-input">New Workspace Name</label>
+          <input type="text" id="rename-ws-input" class="input-minimal block-width" placeholder="Project Workspace">
+        </div>
+        <div class="modal-footer">
+          <button id="btn-cancel-rename" class="btn">Cancel</button>
+          <button id="btn-save-rename" class="btn btn-bold">Rename</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE WORKSPACE MODAL -->
+  <div id="create-modal" class="modal-overlay hidden">
+    <div class="modal-container modal-small">
+      <header class="modal-header">
+        <h2>New Workspace</h2>
+        <button id="btn-close-create" class="btn-icon">×</button>
+      </header>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="create-ws-input">Workspace Name</label>
+          <input type="text" id="create-ws-input" class="input-minimal block-width" placeholder="Project Workspace">
+        </div>
+        <div class="modal-footer">
+          <button id="btn-cancel-create" class="btn">Cancel</button>
+          <button id="btn-save-create" class="btn btn-bold">Create</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dynamic Libraries for offline rendering -->
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/prism.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

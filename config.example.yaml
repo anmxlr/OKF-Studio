@@ -1,0 +1,25 @@
+ollamaEndpoint: http://localhost:11434
+lmStudioEndpoint: http://localhost:1234/v1
+provider: ollama
+model: llama3
+embeddingModel: nomic-embed-text
+temperature: 0.7
+contextSize: 2048
+promptTemplate: >-
+  You are a helpful local AI assistant. Use the following context retrieved from
+  the workspace documents to answer the question. If the context doesn't contain
+  the answer, use your general knowledge but make it clear.
+
+
+  Context:
+
+  {{context}}
+
+
+  Question:
+
+  {{question}}
+
+
+  Answer:
+theme: dark
