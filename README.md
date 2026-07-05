@@ -1,4 +1,5 @@
-# Open Knowledge Format (OKF)
+# OKF Studio
+## using Open Knowledge Format (OKF)
 
 A lightweight, offline-first, local AI knowledge management system where **every chat is simply a folder on disk**.
 
