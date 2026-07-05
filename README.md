@@ -100,7 +100,7 @@ graph TD
    ```
 
 3. **Open App**:
-   Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
+   Open your browser and navigate to: http://localhost:XXXX
 
 ---
 
