@@ -16,3 +16,6 @@ yarn-error.log*
 # OS/System metadata
 .DS_Store
 Thumbs.db
+
+#packed
+dist

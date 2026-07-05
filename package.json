@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Open Knowledge Format (OKF) - Simple local AI knowledge management system",
   "type": "module",
-  "main": "backend/server.js",
+  "main": "desktop.js",
   "scripts": {
     "start": "node backend/server.js",
-    "dev": "node --watch backend/server.js"
+    "dev": "node --watch backend/server.js",
+    "desktop": "electron desktop.js",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "adm-zip": "^0.5.14",
@@ -19,5 +21,30 @@
     "sharp": "^0.33.4",
     "tesseract.js": "^5.1.0",
     "xlsx": "^0.18.5"
+  },
+  "build": {
+    "appId": "com.okf.studio",
+    "productName": "OKF Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "backend/**/*",
+      "frontend/**/*",
+      "desktop.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "frontend/favicon.PNG"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3"
   }
 }
